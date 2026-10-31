@@ -1,0 +1,18 @@
+# Usa o MySQL compartilhado (container "mysql", porta 3306) com um database próprio: order_db.
+services:
+  order-service:
+    build: .
+    container_name: order-service
+    profiles: ["app"]   # sobe só com: docker compose --profile app up
+    env_file: .env   # credenciais e demais variáveis
+    environment:
+      DB_HOST: mysql   # dentro da rede Docker o MySQL é "mysql", não localhost (sobrescreve o .env)
+      DB_PORT: 3306
+    ports:
+      - "8081:8081"
+    networks:
+      - mysql_default
+
+networks:
+  mysql_default:
+    external: true
