@@ -4,6 +4,8 @@ import com.estudos.orderservice.domain.Order;
 import com.estudos.orderservice.domain.OrderItem;
 import com.estudos.orderservice.domain.OrderStatus;
 import com.estudos.orderservice.exception.OrderNotFoundException;
+import com.estudos.orderservice.messaging.OrderEvent;
+import com.estudos.orderservice.messaging.OrderEventOutbox;
 import com.estudos.orderservice.repository.OrderRepository;
 import com.estudos.orderservice.web.dto.CreateOrderRequest;
 import com.estudos.orderservice.web.dto.OrderResponse;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final OrderEventOutbox orderEventOutbox;
 
     @Transactional
     public OrderResponse create(CreateOrderRequest request) {
@@ -32,6 +35,8 @@ public class OrderService {
         Order saved = orderRepository.save(order);
         log.info("Pedido {} criado para o cliente {} (total {})",
                 saved.getId(), saved.getCustomerId(), saved.getTotalAmount());
+        // gravado na outbox na mesma transação; o OutboxRelay envia ao Kafka depois
+        orderEventOutbox.record(OrderEvent.created(saved));
         return OrderResponse.from(saved);
     }
 
@@ -54,6 +59,7 @@ public class OrderService {
         // flush para que @PreUpdate e @Version sejam aplicados antes de montar a resposta
         orderRepository.flush();
         log.info("Pedido {} alterado de {} para {}", id, previous, newStatus);
+        orderEventOutbox.record(OrderEvent.statusChanged(order, previous));
         return OrderResponse.from(order);
     }
 

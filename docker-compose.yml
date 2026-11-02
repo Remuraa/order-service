@@ -8,6 +8,7 @@ services:
     environment:
       DB_HOST: mysql   # dentro da rede Docker o MySQL é "mysql", não localhost (sobrescreve o .env)
       DB_PORT: 3306
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092   # listener interno do container "kafka" na mesma rede
     ports:
       - "8081:8081"
     networks:

@@ -48,7 +48,20 @@ Aplicação local (bom para desenvolver/debugar), conectando em `localhost:3306`
 
 A aplicação sobe em `http://localhost:8081`. Documentação da API (Swagger UI): `http://localhost:8081/swagger-ui.html` - JSON do OpenAPI em `/v3/api-docs`.
 
-Variáveis (no `.env` ou como variáveis de ambiente, que têm prioridade): `SERVER_PORT`, `SWAGGER_ENABLED`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`.
+Variáveis (no `.env` ou como variáveis de ambiente, que têm prioridade): `SERVER_PORT`, `SWAGGER_ENABLED`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, `KAFKA_BOOTSTRAP_SERVERS` (padrão `localhost:9092`; no Docker é `kafka:29092`), `KAFKA_TOPIC_ORDER_EVENTS` (padrão `order-events`).
+
+### Eventos no Kafka (Transactional Outbox)
+
+A cada pedido criado ou status alterado, um evento JSON é publicado no tópico `order-events` (criado automaticamente na subida, 3 partições). A chave da mensagem é o id do pedido, então os eventos de um mesmo pedido mantêm a ordem.
+
+A publicação usa o padrão **Transactional Outbox**:
+
+1. O `OrderService` grava o pedido **e** o evento (tabela `outbox_events`) na mesma transação. Ou os dois são gravados, ou nenhum.
+2. O `OutboxRelay` lê os eventos pendentes a cada 1s (`SELECT ... FOR UPDATE SKIP LOCKED`, seguro com várias instâncias), envia ao Kafka e marca `published_at`.
+3. Se o Kafka estiver fora, o pedido é gravado normalmente e o evento fica pendente (`attempts` e `last_error` registram as falhas). O envio é retomado sozinho quando o broker volta. O relay para no primeiro erro, para não publicar eventos mais novos antes dos mais antigos.
+4. Eventos publicados há mais de 7 dias são apagados todo dia às 03:00.
+
+A entrega é **pelo menos uma vez**: em caso raro (envio ok, mas falha ao marcar no banco) o evento é reenviado. Consumidores devem deduplicar pelo header `eventId`.
 
 Testes:
 
