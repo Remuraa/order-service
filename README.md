@@ -113,7 +113,5 @@ Transições fora desse fluxo retornam **422**. Pedido inexistente → **404**. 
 
 ## Próximos passos (roadmap de estudos)
 
-- [ ] Publicar eventos `OrderCreated` / `OrderStatusChanged` no Kafka (padrão Outbox)
-- [ ] Testes de integração com Testcontainers (MySQL e Kafka)
 - [ ] Manifests Kubernetes (Deployment, Service, ConfigMap, Secret, probes)
 - [ ] Novos serviços (ex.: Payment, Inventory) consumindo os eventos
