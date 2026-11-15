@@ -57,6 +57,22 @@ jobs:
             target/site/jacoco/
           retention-days: 7
 
+      # TEMPORÁRIO: diagnóstico do SONAR_TOKEN (remover depois). Não imprime o valor do token.
+      - name: Debug token Sonar
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          echo "tamanho do token: ${#SONAR_TOKEN}"
+          echo "validate:"
+          curl -s -u "$SONAR_TOKEN:" https://sonarcloud.io/api/authentication/validate
+          echo
+          echo "organizacoes do usuario do token:"
+          curl -s -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/organizations/search?member=true" | grep -o '"key":"[^"]*"' || echo "(nenhuma)"
+          echo "projeto:"
+          curl -s -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/components/show?component=Remuraa_order-service"
+          echo
+
       # PRs vindos de fork não recebem secrets, então a análise é pulada nesses casos
       - name: Análise SonarQube Cloud + Quality Gate
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
