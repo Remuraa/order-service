@@ -1,5 +1,6 @@
 package com.estudos.orderservice.web;
 
+import com.estudos.orderservice.domain.Order;
 import com.estudos.orderservice.domain.OrderStatus;
 import com.estudos.orderservice.exception.InvalidStatusTransitionException;
 import com.estudos.orderservice.exception.OrderNotFoundException;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -81,6 +83,20 @@ class OrderControllerTest {
                                 {"status": "DELIVERED"}
                                 """))
                 .andExpect(status().isUnprocessableContent());
+    }
+
+    @Test
+    void updateStatusReturns409OnConcurrentModification() throws Exception {
+        when(orderService.updateStatus(eq(1L), eq(OrderStatus.CONFIRMED)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Order.class, 1L));
+
+        mockMvc.perform(patch("/api/v1/orders/1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status": "CONFIRMED"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Conflito de concorrência"));
     }
 
     private static OrderResponse sampleResponse(OrderStatus status) {

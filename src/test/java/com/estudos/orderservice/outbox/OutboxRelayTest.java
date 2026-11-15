@@ -16,10 +16,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -81,6 +85,55 @@ class OutboxRelayTest {
         assertThat(first.getAttempts()).isEqualTo(1);
         assertThat(first.getLastError()).contains("broker fora");
         assertThat(second.getAttempts()).isZero();
+    }
+
+    @Test
+    void interruptedSendRestoresInterruptFlagAndStopsBatch() throws Exception {
+        OutboxEvent first = event("e-1", "1");
+        OutboxEvent second = event("e-2", "1");
+        when(repository.lockPendingBatch(100)).thenReturn(List.of(first, second));
+        CompletableFuture<SendResult<String, String>> interrupted = new CompletableFuture<>() {
+            @Override
+            public SendResult<String, String> get(long timeout, TimeUnit unit) throws InterruptedException {
+                throw new InterruptedException("parando");
+            }
+        };
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(interrupted);
+
+        try {
+            relay.relayPending();
+
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            // limpa a flag para não afetar os próximos testes na mesma thread
+            Thread.interrupted();
+        }
+        verify(kafkaTemplate, times(1)).send(any(ProducerRecord.class));
+        assertThat(first.getPublishedAt()).isNull();
+        assertThat(first.getAttempts()).isEqualTo(1);
+        assertThat(first.getLastError()).isEqualTo("interrompido");
+        assertThat(second.getAttempts()).isZero();
+    }
+
+    @Test
+    void cleanupDeletesEventsPublishedBeforeRetention() {
+        when(repository.deletePublishedBefore(any(Instant.class))).thenReturn(3);
+        Instant expected = Instant.now().minus(Duration.ofDays(7));
+
+        relay.cleanupPublished();
+
+        ArgumentCaptor<Instant> captor = ArgumentCaptor.forClass(Instant.class);
+        verify(repository).deletePublishedBefore(captor.capture());
+        assertThat(captor.getValue()).isCloseTo(expected, within(5, ChronoUnit.SECONDS));
+    }
+
+    @Test
+    void cleanupWithNothingToDeleteDoesNotFail() {
+        when(repository.deletePublishedBefore(any(Instant.class))).thenReturn(0);
+
+        relay.cleanupPublished();
+
+        verify(repository).deletePublishedBefore(any(Instant.class));
     }
 
     private static OutboxEvent event(String eventId, String orderId) {

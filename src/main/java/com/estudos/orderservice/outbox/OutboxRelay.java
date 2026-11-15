@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -88,8 +89,9 @@ public class OutboxRelay {
     @Scheduled(cron = "${app.outbox.cleanup-cron}")
     public void cleanupPublished() {
         Instant before = Instant.now().minus(retention);
-        Integer deleted = transactionTemplate.execute(status -> repository.deletePublishedBefore(before));
-        if (deleted != null && deleted > 0) {
+        int deleted = Objects.requireNonNullElse(
+                transactionTemplate.execute(status -> repository.deletePublishedBefore(before)), 0);
+        if (deleted > 0) {
             log.info("Outbox: {} eventos publicados antes de {} removidos", deleted, before);
         }
     }

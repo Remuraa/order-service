@@ -26,6 +26,7 @@
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
         <sonar.organization>remuraa</sonar.organization>
         <sonar.projectKey>Remuraa_order-service</sonar.projectKey>
+        <sonar.coverage.exclusions>**/OrderServiceApplication.java</sonar.coverage.exclusions>
     </properties>
 
     <dependencies>

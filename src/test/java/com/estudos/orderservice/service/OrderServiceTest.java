@@ -12,12 +12,17 @@ import com.estudos.orderservice.repository.OrderRepository;
 import com.estudos.orderservice.web.dto.CreateOrderRequest;
 import com.estudos.orderservice.web.dto.OrderItemRequest;
 import com.estudos.orderservice.web.dto.OrderResponse;
+import com.estudos.orderservice.web.dto.OrderSummaryResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -60,6 +65,40 @@ class OrderServiceTest {
         assertThat(event.status()).isEqualTo(OrderStatus.PENDING);
         assertThat(event.previousStatus()).isNull();
         assertThat(event.totalAmount()).isEqualByComparingTo("40.00");
+    }
+
+    @Test
+    void findAllWithoutStatusListsEveryOrder() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(orderRepository.findAll(pageable)).thenReturn(new PageImpl<>(List.of(newOrder()), pageable, 1));
+
+        Page<OrderSummaryResponse> page = orderService.findAll(null, pageable);
+
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        assertThat(page.getContent().getFirst().status()).isEqualTo(OrderStatus.PENDING);
+        verify(orderRepository, never()).findByStatus(any(), any());
+    }
+
+    @Test
+    void findAllWithStatusFiltersByStatus() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(orderRepository.findByStatus(OrderStatus.PENDING, pageable))
+                .thenReturn(new PageImpl<>(List.of(newOrder()), pageable, 1));
+
+        Page<OrderSummaryResponse> page = orderService.findAll(OrderStatus.PENDING, pageable);
+
+        assertThat(page.getContent()).hasSize(1);
+        verify(orderRepository, never()).findAll(any(Pageable.class));
+    }
+
+    @Test
+    void findByIdReturnsOrderWithItems() {
+        when(orderRepository.findWithItemsById(1L)).thenReturn(Optional.of(newOrder()));
+
+        OrderResponse response = orderService.findById(1L);
+
+        assertThat(response.status()).isEqualTo(OrderStatus.PENDING);
+        assertThat(response.items()).hasSize(1);
     }
 
     @Test
